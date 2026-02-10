@@ -55,9 +55,9 @@ namespace WavHeaderScanner
         public DateTime ReleaseDate { get; set; } = DateTime.MinValue;
         public DateTime ImportDate { get; set; }
         public short MpegBitrate { get; set; } = 0;
-        public ushort PlaybackSpeed { get; set; } = 33768;
-        public ushort PlaybackLevel { get; set; } = 21845;
-        public ushort NewPlaybackLevel { get; set; } = 33768;
+        public ushort PlaybackSpeed { get; set; } = 0;
+        public ushort PlaybackLevel { get; set; } = 0;
+        public ushort NewPlaybackLevel { get; set; } = 0;
         public uint ChopSize { get; set; } = 0;
         public uint VtEomOvr { get; set; } = 0;
         public uint DesiredLength { get; set; } = 0;
@@ -404,7 +404,7 @@ namespace WavHeaderScanner
                         fileInfo.StartTime = new TimeSpan(0, 0, 0, startSeconds, startHundredths * 10);
                         fileInfo.EndTime = new TimeSpan(0, 0, 0, endSeconds, endHundredths * 10);
 
-                        DateTime tempStartDate, tempEndDate;
+                        DateTime tempStartDate, tempEndDate, tempImportDate;
 
                         // Calculate start and end dates
                         if (!DateTime.TryParseExact(rawStartDate, "MMddyy", null, System.Globalization.DateTimeStyles.None, out tempStartDate))
@@ -416,7 +416,6 @@ namespace WavHeaderScanner
                             fileInfo.StartDate = tempStartDate.AddHours(startHour);
                         }
 
-                        DateTime endDate;
                         if (!DateTime.TryParseExact(rawEndDate, "MMddyy", null, System.Globalization.DateTimeStyles.None, out tempEndDate))
                         {
                             fileInfo.EndDate = DateTime.MaxValue;
@@ -424,6 +423,15 @@ namespace WavHeaderScanner
                         else
                         {
                             fileInfo.EndDate = tempEndDate.AddHours(endHour);
+                        }
+
+                        if (!DateTime.TryParseExact(rawImportDate, "MMddyy", null, System.Globalization.DateTimeStyles.None, out tempImportDate))
+                        {
+                            fileInfo.ImportDate = DateTime.UnixEpoch;
+                        }
+                        else
+                        {
+                            fileInfo.ImportDate = tempImportDate.AddHours(importHour);
                         }
 
                         if (verbose)
@@ -668,8 +676,16 @@ namespace WavHeaderScanner
                 writer.Write(data.EndType);                                                         // 1 byte
                 writer.Write(FixedString(data.ReleaseDate.Year.ToString(), 4, (byte)'0'));          // 4 bytes
                 writer.Write((byte)0);                                                              // 1 byte, skip
-                writer.Write((byte)(data.ImportDate.Hour + 128));                                   // 1 byte
-                writer.Write(data.ImportDate.ToString("MMddyy").ToCharArray());                     // 6 bytes
+                if (data.ImportDate.Equals(DateTime.UnixEpoch))
+                {
+                    writer.Write((byte)128);                                                        // 1 byte, Hour + 128 offset
+                    writer.Write("000000".ToCharArray());                                           // 6 bytes, Import date
+                }
+                else
+                {
+                    writer.Write((byte)(data.ImportDate.Hour + 128));                                // 1 byte, Hour + 128 offset
+                    writer.Write(data.ImportDate.ToString("MMddyy").ToCharArray());                 // 6 bytes, Import date
+                }
                 writer.Write(data.MpegBitrate);                                                     // 2 bytes
                 writer.Write(data.PlaybackSpeed);                                                   // 2 bytes, raw playback speed
                 writer.Write(data.PlaybackLevel);                                                   // 2 bytes, raw playback level
