@@ -100,7 +100,8 @@ namespace WavHeaderScanner
             {
 
                 string fileName = Path.GetFileName(filePath);
-                string destinationPath = Path.Combine(outputDir, fileName);
+                string destinationPath = Path.Combine(outputDir, Path.GetRelativePath(sourceDir, filePath));
+                Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
 
                 Console.WriteLine($"Processing file: {fileName}");
 
