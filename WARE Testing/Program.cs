@@ -604,10 +604,10 @@ namespace WavHeaderScanner
                 writer.Write(FixedString(data.CartNumber, 4, 0x00));                                // 4 bytes, cart number
                 writer.Write((byte)' ');                                                            // 1 byte, cart padding, skip
                 writer.Write(FixedString(data.RawLength, 5, (byte)' '));                            // 5 bytes, file length in either MM:SS or HMMSS format based on rawLengthFormat
-                writer.Write((ushort)data.StartTime.Seconds);                                       // 2 bytes, start time seconds
-                writer.Write((ushort)(data.StartTime.Milliseconds / 10));                           // 2 bytes, start time hundredths
-                writer.Write((ushort)data.EndTime.Seconds);                                         // 2 bytes, end time seconds
-                writer.Write((ushort)(data.EndTime.Milliseconds / 10));                             // 2 bytes, end time hundredths
+                writer.Write((short)data.StartTime.Seconds);                                        // 2 bytes, start time seconds
+                writer.Write((short)(data.StartTime.Milliseconds / 10));                            // 2 bytes, start time hundredths
+                writer.Write((short)data.EndTime.Seconds);                                          // 2 bytes, end time seconds
+                writer.Write((short)(data.EndTime.Milliseconds / 10));                              // 2 bytes, end time hundredths
 
                 // Write Start and End dates, 6 bytes each
                 if (data.StartDate.Equals(DateTime.UnixEpoch))
