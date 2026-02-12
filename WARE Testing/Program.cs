@@ -200,9 +200,9 @@ namespace WavHeaderScanner
                             fileInfo.Title = new string(reader.ReadChars(43)).TrimEnd(trimChars);               // 32 bytes, title
                             fileInfo.CartNumber = new string(reader.ReadChars(4)).TrimEnd('\0');                // 4 bytes, cart number
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, cart padding, skip
-                            fileInfo.RawLength = new string(reader.ReadChars(5)).TrimStart(' ').PadLeft(5, '0');// 5 bytes, file length in either MM:SS or HMMSS format based on rawLengthFormat
-                            startHundredths = reader.ReadInt16();                                               // 2 bytes, start time hundredths
+                            fileInfo.RawLength = new string(reader.ReadChars(5));                               // 5 bytes, file length in either MM:SS or HMMSS format based on rawLengthFormat
                             startSeconds = reader.ReadInt16();                                                  // 2 bytes, start time seconds
+                            startHundredths = reader.ReadInt16();                                               // 2 bytes, start time hundredths
                             endSeconds = reader.ReadInt16();                                                    // 2 bytes, end time seconds
                             endHundredths = reader.ReadInt16();                                                 // 2 bytes, end time hundredths
                             rawStartDate = new string(reader.ReadChars(6)).TrimEnd('\0');                       // 6 bytes, start date in YYMMDD format
@@ -604,9 +604,9 @@ namespace WavHeaderScanner
                 writer.Write(FixedString(data.CartNumber, 4, 0x00));                                // 4 bytes, cart number
                 writer.Write((byte)' ');                                                            // 1 byte, cart padding, skip
                 writer.Write(FixedString(data.RawLength, 5, (byte)' '));                            // 5 bytes, file length in either MM:SS or HMMSS format based on rawLengthFormat
-                writer.Write((short)data.StartTime.Seconds);                                        // 2 bytes, start time seconds
+                writer.Write((short)data.StartTime.TotalSeconds);                                   // 2 bytes, start time seconds
                 writer.Write((short)(data.StartTime.Milliseconds / 10));                            // 2 bytes, start time hundredths
-                writer.Write((short)data.EndTime.Seconds);                                          // 2 bytes, end time seconds
+                writer.Write((short)data.EndTime.TotalSeconds);                                     // 2 bytes, end time seconds
                 writer.Write((short)(data.EndTime.Milliseconds / 10));                              // 2 bytes, end time hundredths
 
                 // Write Start and End dates, 6 bytes each
@@ -689,6 +689,7 @@ namespace WavHeaderScanner
                 writer.Write(data.MpegBitrate);                                                     // 2 bytes
                 writer.Write(data.PlaybackSpeed);                                                   // 2 bytes, raw playback speed
                 writer.Write(data.PlaybackLevel);                                                   // 2 bytes, raw playback level
+                // TODO: Calculate proper file size and flags instead of overwriting with 0s
                 writer.Write(new byte[5]);                                                          // 5 bytes, file size, skip, new size should be calculated (UInt32)
                 writer.Write(data.NewPlaybackLevel);                                                // 2 bytes, playback level as percentage of original level x10, highest bit means valid
                 writer.Write(data.ChopSize);                                                        // 4 bytes, hundredths of seconds removed from audio middle, highest bt means valid
