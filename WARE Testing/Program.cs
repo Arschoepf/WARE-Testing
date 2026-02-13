@@ -22,7 +22,7 @@ namespace WavHeaderScanner
     {
         public byte Flags0 { get; set; } = 0x86;
         public short ArtistNumber { get; set; } = 0;
-        public string Title { get; set; } = "";
+        public string Title { get; set; } = string.Empty;
         public string CartNumber { get; set; } = "????";
         public string RawLength { get; set; } = "00000";
         public TimeSpan StartTime { get; set; } = new TimeSpan(0);
@@ -48,8 +48,8 @@ namespace WavHeaderScanner
         public string AfterCategory { get; set; } = "   ";
         public string AfterCart { get; set; } = "    ";
         public byte[] RawDayparting { get; set; } = Enumerable.Repeat((byte)0xFF, 21).ToArray();
-        public string Artist { get; set; } = "";
-        public string Album { get; set; } = "";
+        public string Artist { get; set; } = string.Empty;
+        public string Album { get; set; } = string.Empty;
         public string IntroSeconds { get; set; } = "00";
         public char EndType { get; set; } = ' ';
         public DateTime ReleaseDate { get; set; } = DateTime.MinValue;
@@ -182,6 +182,9 @@ namespace WavHeaderScanner
                         short vtStartHundredths = 0;
                         byte importHour = 0;
                         string rawImportDate = "000000";
+                        byte[] rawTitle;
+                        byte[] rawArtist;
+                        byte[] rawAlbum;
 
                         if (scotEntry != null && !dataRead)
                         {
@@ -197,7 +200,8 @@ namespace WavHeaderScanner
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, scratchpad, skip
                             fileInfo.Flags0 = reader.ReadByte();                                                // 1 byte, flags0 bitfield
                             fileInfo.ArtistNumber = reader.ReadInt16();                                         // 2 bytes, artist number
-                            fileInfo.Title = new string(reader.ReadChars(43)).TrimEnd(trimChars);               // 32 bytes, title
+                            rawTitle = reader.ReadBytes(43);                                                    // 43 bytes, title, read as raw bytes for later trimming and encoding handling
+                            fileInfo.Title = Encoding.UTF8.GetString(rawTitle).TrimEnd('\0', ' ');              // Process title with UTF-8 encoding and trim nulls and spaces
                             fileInfo.CartNumber = new string(reader.ReadChars(4)).TrimEnd('\0');                // 4 bytes, cart number
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, cart padding, skip
                             fileInfo.RawLength = new string(reader.ReadChars(5));                               // 5 bytes, file length in either MM:SS or HMMSS format based on rawLengthFormat
@@ -236,8 +240,10 @@ namespace WavHeaderScanner
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, after link padding, skip
                             fileInfo.RawDayparting = reader.ReadBytes(21);                                      // 21 bytes, dayparting bitfield for 7 days * 24 hours = 168 bits (21 bytes)
                             fs.Seek(108, SeekOrigin.Current);                                                   // 108 bytes, unused, skip
-                            fileInfo.Artist = new string(reader.ReadChars(34)).TrimEnd(trimChars);              // 34 bytes
-                            fileInfo.Album = new string(reader.ReadChars(34)).TrimEnd(trimChars);               // 34 bytes
+                            rawArtist = reader.ReadBytes(43);                                                   // 43 bytes, artist, read as raw bytes for later trimming and encoding handling
+                            fileInfo.Artist = Encoding.UTF8.GetString(rawArtist).TrimEnd('\0', ' ');            // Process artist with UTF-8 encoding and trim nulls and spaces
+                            rawAlbum = reader.ReadBytes(43);                                                    // 43 bytes, album, read as raw bytes for later trimming and encoding handling
+                            fileInfo.Album = Encoding.UTF8.GetString(rawAlbum).TrimEnd('\0', ' ');              // Process album with UTF-8 encoding and trim nulls and spaces
                             fileInfo.IntroSeconds = new string(reader.ReadChars(2)).TrimEnd('\0');              // 2 bytes
                             fileInfo.EndType = (char)reader.ReadByte();                                         // 1 byte
                             fileInfo.ReleaseDate = new DateTime(int.Parse(new string(reader.ReadChars(4)).TrimEnd('\0')), 1, 1);                      // 4 bytes
@@ -696,9 +702,9 @@ namespace WavHeaderScanner
                 writer.Write(data.VtEomOvr);                                                        // 4 bytes, millis to subtract from pre-cut EOM
                 writer.Write(data.DesiredLength);                                                   // 4 bytes, desired file length
                 writer.Write(data.Trigger1);                                                        // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
-                writer.Write(data.Trigger1);                                                        // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
-                writer.Write(data.Trigger1);                                                        // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
-                writer.Write(data.Trigger1);                                                        // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
+                writer.Write(data.Trigger2);                                                        // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
+                writer.Write(data.Trigger3);                                                        // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
+                writer.Write(data.Trigger4);                                                        // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
                 writer.Write(new byte[33]);                                                         // 33 bytes to end of header
 
                 long totalChunkSize = writer.BaseStream.Length;
@@ -770,20 +776,29 @@ namespace WavHeaderScanner
         private static byte[] FixedString(string value, int length, byte pad)
         {
             // 1. Handle nulls
-            if (value == null) value = "";
+            if (value == null) value = string.Empty;
 
             // 2. Create a buffer of the exact length filled with pad character
             byte[] buffer = new byte[length];
             Array.Fill(buffer, pad);
 
             // 3. Get bytes from string
-            byte[] strBytes = Encoding.ASCII.GetBytes(value);
+            byte[] strBytes = Encoding.UTF8.GetBytes(value);
 
-            // 4. Copy string into buffer (truncating if necessary)
-            int copyLen = Math.Min(strBytes.Length, length);
-            Array.Copy(strBytes, buffer, copyLen);
+            // 4. Truncate carefully! 
+            // If you cut in the middle of a multi-byte sequence, you get a "corrupt" character.
+            int copyLen = strBytes.Length;
+            if (copyLen > length)
+            {
+                copyLen = length;
+                // Ensure we don't truncate in the middle of a UTF-8 character
+                while (copyLen > 0 && (strBytes[copyLen] & 0xC0) == 0x80)
+                {
+                    copyLen--;
+                }
+            }
 
-            // 5. Return
+            Array.Copy(strBytes, 0, buffer, 0, copyLen);
             return buffer;
         }
 
