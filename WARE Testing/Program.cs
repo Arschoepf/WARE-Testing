@@ -190,78 +190,115 @@ namespace WavHeaderScanner
                         {
                             dataRead = true;
 
-                            if(dumpChunks) { DumpChunk(fs, scotEntry); }
+                            if (dumpChunks) { DumpChunk(fs, scotEntry); }
 
                             // Parse the fields based on the expected structure
                             fs.Seek(scotEntry.Offset, SeekOrigin.Begin);
 
-                            char[] trimChars = { '\0', ' ' };
-
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, scratchpad, skip
                             fileInfo.Flags0 = reader.ReadByte();                                                // 1 byte, flags0 bitfield
                             fileInfo.ArtistNumber = reader.ReadInt16();                                         // 2 bytes, artist number
-                            rawTitle = reader.ReadBytes(43);                                                    // 43 bytes, title, read as raw bytes for later trimming and encoding handling
-                            fileInfo.Title = Encoding.UTF8.GetString(rawTitle).TrimEnd('\0', ' ');              // Process title with UTF-8 encoding and trim nulls and spaces
-                            fileInfo.CartNumber = new string(reader.ReadChars(4)).TrimEnd('\0');                // 4 bytes, cart number
+
+                            rawTitle = reader.ReadBytes(43);                                                    // 43 bytes, title
+                            fileInfo.Title = Encoding.UTF8.GetString(rawTitle).TrimEnd('\0', ' ');              // Process title with UTF-8
+
+                            byte[] rawCart = reader.ReadBytes(4);                                               // 4 bytes, cart number
+                            fileInfo.CartNumber = Encoding.UTF8.GetString(rawCart).TrimEnd('\0', ' ');
+
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, cart padding, skip
-                            fileInfo.RawLength = new string(reader.ReadChars(5));                               // 5 bytes, file length in either MM:SS or HMMSS format based on rawLengthFormat
+
+                            byte[] rawLenBytes = reader.ReadBytes(5);                                           // 5 bytes, file length
+                            fileInfo.RawLength = Encoding.UTF8.GetString(rawLenBytes).TrimEnd('\0', ' ');
+
                             startSeconds = reader.ReadInt16();                                                  // 2 bytes, start time seconds
                             startHundredths = reader.ReadInt16();                                               // 2 bytes, start time hundredths
                             endSeconds = reader.ReadInt16();                                                    // 2 bytes, end time seconds
                             endHundredths = reader.ReadInt16();                                                 // 2 bytes, end time hundredths
-                            rawStartDate = new string(reader.ReadChars(6)).TrimEnd('\0');                       // 6 bytes, start date in YYMMDD format
-                            rawEndDate = new string(reader.ReadChars(6)).TrimEnd('\0');                         // 6 bytes, end date in YYMMDD format
-                            tempStartHour = (reader.ReadByte() - 0x80);                                         // 1 byte, start hour (0-23 stored as 0x80-0x97)
-                            if (tempStartHour < 0) { tempStartHour = 0; }
-                            startHour = (byte)tempStartHour;
-                            tempEndHour = (reader.ReadByte() - 0x80);                                           // 1 byte, end hour (0-23 stored as 0x80-0x97)
-                            if (tempEndHour < 0) { tempEndHour = 0; }
-                            endHour = (byte)tempEndHour;
-                            fileInfo.AudioType = (char)reader.ReadByte();                                       // 1 byte, audio type (e.g. 'A' for analog, 'D' for digital)
-                            fileInfo.SampleRate = reader.ReadInt16() * 100;                                     // 2 bytes, sample rate in Hz (stored as actual sample rate divided by 100)
-                            fileInfo.StereoMono = (char)reader.ReadByte();                                      // 1 byte, stereo/mono (e.g. 'S' for stereo, 'M' for mono)
-                            fileInfo.CompressionType = reader.ReadByte();                                       // 1 byte, compression type (refer to documentation for specific values)
-                            fileInfo.EomStartTenths = reader.ReadInt32();                                       // 4 bytes, EOM start time in tenths of a second
-                            fileInfo.EomLengthHundredths = reader.ReadInt16();                                  // 2 bytes, EOM length in hundredths of a second
-                            fileInfo.Flags1 = reader.ReadBytes(4);                                              // 4 byte, extended (flags)1 bitfield
-                            fileInfo.HookStartMs = reader.ReadInt32();                                          // 4 bytes, hook start time in milliseconds
-                            fileInfo.HookEomMs = reader.ReadInt32();                                            // 4 bytes, hook EOM time in milliseconds
-                            fileInfo.HookEndMs = reader.ReadInt32();                                            // 4 bytes, hook end time in milliseconds
-                            fileInfo.FontColor = reader.ReadBytes(4);                                           // 4 bytes, font color RGBA?
-                            fileInfo.BackgroundColor = reader.ReadBytes(4);                                     // 4 bytes, background color RGBA?
-                            fileInfo.SegmentEomMs = reader.ReadInt32();                                         // 4 bytes, segment EOM time in milliseconds (if file has segments)
-                            vtStartSeconds = reader.ReadInt16();                                                // 2 bytes, VT start time seconds
-                            vtStartHundredths = reader.ReadInt16();                                             // 2 bytes, VT start time hundredths
-                            fileInfo.BeforeCategory = new string(reader.ReadChars(3)).TrimEnd('\0');            // 3 bytes, before link category
-                            fileInfo.BeforeCart = new string(reader.ReadChars(4)).TrimEnd('\0');                // 4 bytes, before link cart number
+
+                            byte[] rawStartDtBytes = reader.ReadBytes(6);                                       // 6 bytes, start date YYMMDD
+                            rawStartDate = Encoding.UTF8.GetString(rawStartDtBytes).TrimEnd('\0', ' ');
+
+                            byte[] rawEndDtBytes = reader.ReadBytes(6);                                         // 6 bytes, end date YYMMDD
+                            rawEndDate = Encoding.UTF8.GetString(rawEndDtBytes).TrimEnd('\0', ' ');
+
+                            tempStartHour = (reader.ReadByte() - 0x80);                                         // 1 byte, start hour (0x80-0x97)
+                            startHour = (byte)Math.Max(0, tempStartHour);
+
+                            tempEndHour = (reader.ReadByte() - 0x80);                                           // 1 byte, end hour (0x80-0x97)
+                            endHour = (byte)Math.Max(0, tempEndHour);
+
+                            fileInfo.AudioType = (char)reader.ReadByte();                                       // 1 byte, audio type
+                            fileInfo.SampleRate = reader.ReadInt16() * 100;                                     // 2 bytes, sample rate Hz
+                            fileInfo.StereoMono = (char)reader.ReadByte();                                      // 1 byte, stereo/mono
+                            fileInfo.CompressionType = reader.ReadByte();                                       // 1 byte, compression type
+                            fileInfo.EomStartTenths = reader.ReadInt32();                                       // 4 bytes, EOM start tenths
+                            fileInfo.EomLengthHundredths = reader.ReadInt16();                                  // 2 bytes, EOM length hundredths
+                            fileInfo.Flags1 = reader.ReadBytes(4);                                              // 4 byte, extended flags
+                            fileInfo.HookStartMs = reader.ReadInt32();                                          // 4 bytes, hook start ms
+                            fileInfo.HookEomMs = reader.ReadInt32();                                            // 4 bytes, hook EOM ms
+                            fileInfo.HookEndMs = reader.ReadInt32();                                            // 4 bytes, hook end ms
+                            fileInfo.FontColor = reader.ReadBytes(4);                                           // 4 bytes, font color
+                            fileInfo.BackgroundColor = reader.ReadBytes(4);                                     // 4 bytes, background color
+                            fileInfo.SegmentEomMs = reader.ReadInt32();                                         // 4 bytes, segment EOM ms
+
+                            vtStartSeconds = reader.ReadInt16();                                                // 2 bytes, VT start seconds
+                            vtStartHundredths = reader.ReadInt16();                                             // 2 bytes, VT start hundredths
+
+                            byte[] rawBeforeCat = reader.ReadBytes(3);                                          // 3 bytes, before link category
+                            fileInfo.BeforeCategory = Encoding.UTF8.GetString(rawBeforeCat).TrimEnd('\0', ' ');
+                            byte[] rawBeforeCart = reader.ReadBytes(4);                                         // 4 bytes, before link cart
+                            fileInfo.BeforeCart = Encoding.UTF8.GetString(rawBeforeCart).TrimEnd('\0', ' ');
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, before link padding, skip
-                            fileInfo.AfterCategory = new string(reader.ReadChars(3)).TrimEnd('\0');             // 3 bytes, after link category
-                            fileInfo.AfterCart = new string(reader.ReadChars(4)).TrimEnd('\0');                 // 4 bytes, after link cart number
+
+                            byte[] rawAfterCat = reader.ReadBytes(3);                                           // 3 bytes, after link category
+                            fileInfo.AfterCategory = Encoding.UTF8.GetString(rawAfterCat).TrimEnd('\0', ' ');
+                            byte[] rawAfterCart = reader.ReadBytes(4);                                          // 4 bytes, after link cart
+                            fileInfo.AfterCart = Encoding.UTF8.GetString(rawAfterCart).TrimEnd('\0', ' ');
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, after link padding, skip
-                            fileInfo.RawDayparting = reader.ReadBytes(21);                                      // 21 bytes, dayparting bitfield for 7 days * 24 hours = 168 bits (21 bytes)
+
+                            fileInfo.RawDayparting = reader.ReadBytes(21);                                      // 21 bytes, dayparting
                             fs.Seek(108, SeekOrigin.Current);                                                   // 108 bytes, unused, skip
-                            rawArtist = reader.ReadBytes(43);                                                   // 43 bytes, artist, read as raw bytes for later trimming and encoding handling
-                            fileInfo.Artist = Encoding.UTF8.GetString(rawArtist).TrimEnd('\0', ' ');            // Process artist with UTF-8 encoding and trim nulls and spaces
-                            rawAlbum = reader.ReadBytes(43);                                                    // 43 bytes, album, read as raw bytes for later trimming and encoding handling
-                            fileInfo.Album = Encoding.UTF8.GetString(rawAlbum).TrimEnd('\0', ' ');              // Process album with UTF-8 encoding and trim nulls and spaces
-                            fileInfo.IntroSeconds = new string(reader.ReadChars(2)).TrimEnd('\0');              // 2 bytes
-                            fileInfo.EndType = (char)reader.ReadByte();                                         // 1 byte
-                            fileInfo.ReleaseDate = new DateTime(int.Parse(new string(reader.ReadChars(4)).TrimEnd('\0')), 1, 1);                      // 4 bytes
+
+                            rawArtist = reader.ReadBytes(34);                                                   // 34 bytes, artist
+                            fileInfo.Artist = Encoding.UTF8.GetString(rawArtist).TrimEnd('\0', ' ');
+
+                            rawAlbum = reader.ReadBytes(34);                                                    // 34 bytes, album
+                            fileInfo.Album = Encoding.UTF8.GetString(rawAlbum).TrimEnd('\0', ' ');
+
+                            byte[] rawIntro = reader.ReadBytes(2);                                              // 2 bytes, intro seconds
+                            fileInfo.IntroSeconds = Encoding.UTF8.GetString(rawIntro).TrimEnd('\0', ' ');
+                            fileInfo.EndType = (char)reader.ReadByte();                                         // 1 byte, end type
+
+                            byte[] rawYearBytes = reader.ReadBytes(4);                                          // 4 bytes, release year
+                            string yearStr = Encoding.UTF8.GetString(rawYearBytes).TrimEnd('\0', ' ').Trim();
+                            if (int.TryParse(new string(yearStr.Where(char.IsDigit).ToArray()), out int yearVal) && yearVal > 0)
+                            {
+                                fileInfo.ReleaseDate = new DateTime(yearVal, 1, 1);
+                            }
+                            else
+                            {
+                                fileInfo.ReleaseDate = new DateTime(1900, 1, 1);
+                            }
+
                             fs.Seek(1, SeekOrigin.Current);                                                     // 1 byte, skip
-                            importHour = (byte)(reader.ReadByte() - 0x80);                                      // 1 byte
-                            rawImportDate = new string(reader.ReadChars(6)).TrimEnd('\0');                      // 6 bytes
-                            fileInfo.MpegBitrate = reader.ReadInt16();                                          // 2 bytes
-                            fileInfo.PlaybackSpeed = reader.ReadUInt16();                                       // 2 bytes, raw playback speed
-                            fileInfo.PlaybackLevel = reader.ReadUInt16();                                       // 2 bytes, raw playback level
-                            fs.Seek(5, SeekOrigin.Current);                                                     // 4 bytes, file size, skip, new size should be calculated (UInt32)
-                            fileInfo.NewPlaybackLevel = reader.ReadUInt16();                                    // 2 bytes, playback level as percentage of original level x10, highest bit means valid
-                            fileInfo.ChopSize = reader.ReadUInt32();                                            // 4 bytes, hundredths of seconds removed from audio middle, highest bt means valid
-                            fileInfo.VtEomOvr = reader.ReadUInt32();                                            // 4 bytes, millis to subtract from pre-cut EOM
-                            fileInfo.DesiredLength = reader.ReadUInt32();                                       // 4 bytes, desired file length
-                            fileInfo.Trigger1 = reader.ReadUInt32();                                            // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
-                            fileInfo.Trigger2 = reader.ReadUInt32();                                            // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
-                            fileInfo.Trigger3 = reader.ReadUInt32();                                            // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
-                            fileInfo.Trigger4 = reader.ReadUInt32();                                            // 4 bytes, trigger, Highest byte is source ID, next 3 bytes are tenths of seconds from beginning of audio
+
+                            importHour = (byte)(reader.ReadByte() - 0x80);                                      // 1 byte, import hour
+
+                            byte[] rawImpDtBytes = reader.ReadBytes(6);                                         // 6 bytes, import date
+                            rawImportDate = Encoding.UTF8.GetString(rawImpDtBytes).TrimEnd('\0', ' ');
+
+                            fileInfo.MpegBitrate = reader.ReadInt16();                                          // 2 bytes, bitrate
+                            fileInfo.PlaybackSpeed = reader.ReadUInt16();                                       // 2 bytes, playback speed
+                            fileInfo.PlaybackLevel = reader.ReadUInt16();                                       // 2 bytes, playback level
+                            fs.Seek(5, SeekOrigin.Current);                                                     // 5 bytes, skip
+                            fileInfo.NewPlaybackLevel = reader.ReadUInt16();                                    // 2 bytes, new level
+                            fileInfo.ChopSize = reader.ReadUInt32();                                            // 4 bytes, chop size
+                            fileInfo.VtEomOvr = reader.ReadUInt32();                                            // 4 bytes, VT EOM override
+                            fileInfo.DesiredLength = reader.ReadUInt32();                                       // 4 bytes, desired length
+                            fileInfo.Trigger1 = reader.ReadUInt32();                                            // 4 bytes, trigger 1
+                            fileInfo.Trigger2 = reader.ReadUInt32();                                            // 4 bytes, trigger 2
+                            fileInfo.Trigger3 = reader.ReadUInt32();                                            // 4 bytes, trigger 3
+                            fileInfo.Trigger4 = reader.ReadUInt32();                                            // 4 bytes, trigger 4
                             fs.Seek(33, SeekOrigin.Current);                                                    // 33 bytes to end of header
 
                         }
@@ -496,7 +533,7 @@ namespace WavHeaderScanner
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"\nSomething went wrong: {ex.Message}");
+                    Console.WriteLine($"\nSomething went wrong: {ex}");
                 }
             }
 
@@ -775,24 +812,28 @@ namespace WavHeaderScanner
 
         private static byte[] FixedString(string value, int length, byte pad)
         {
-            // 1. Handle nulls
             if (value == null) value = string.Empty;
 
-            // 2. Create a buffer of the exact length filled with pad character
             byte[] buffer = new byte[length];
             Array.Fill(buffer, pad);
 
-            // 3. Get bytes from string
             byte[] strBytes = Encoding.UTF8.GetBytes(value);
 
-            // 4. Truncate carefully! 
-            // If you cut in the middle of a multi-byte sequence, you get a "corrupt" character.
             int copyLen = strBytes.Length;
             if (copyLen > length)
             {
+                // Start at the maximum allowed length
                 copyLen = length;
-                // Ensure we don't truncate in the middle of a UTF-8 character
-                while (copyLen > 0 && (strBytes[copyLen] & 0xC0) == 0x80)
+
+                // 1. Back up if we are in the middle of a multi-byte character (Continuation Byte)
+                while (copyLen > 0 && (strBytes[copyLen - 1] & 0xC0) == 0x80)
+                {
+                    copyLen--;
+                }
+
+                // 2. Back up one more if the current last byte is a Lead Byte (Starts with 11)
+                // because it's now missing its required continuation bytes.
+                if (copyLen > 0 && (strBytes[copyLen - 1] & 0x80) != 0)
                 {
                     copyLen--;
                 }
