@@ -1,13 +1,6 @@
-﻿using System;
-using System.Collections;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Reflection;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
+﻿using System.Collections;
 using System.Text;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Security.Cryptography;
 
 namespace WavHeaderScanner
 {
@@ -74,7 +67,7 @@ namespace WavHeaderScanner
         static void Main(string[] args)
         {
 
-            bool verbose = false;
+            bool verbose = true;
             bool dumpChunks = false;
 
             Console.WriteLine("WMTU Audio Ripper/Editor");
@@ -86,10 +79,12 @@ namespace WavHeaderScanner
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string targetFolder = Path.Combine(appData, "WARE");
             string sourceDir = Path.Combine(targetFolder, "Input Files");
+            string tempDir = Path.Combine(targetFolder, "Temp\\ In-Process Audio");
             string outputDir = Path.Combine(targetFolder, "Output Files");
 
             // Create directories if they don't exist
             Directory.CreateDirectory(sourceDir);
+            Directory.CreateDirectory(tempDir);
             Directory.CreateDirectory(outputDir);
 
             // Get all wav files
@@ -98,10 +93,13 @@ namespace WavHeaderScanner
 
             foreach (string filePath in files)
             {
+                // Unused code for creating a temp file name
+                //string tempName = Guid.NewGuid().ToString("n").Substring(0, 8);
+                //string tempPath = Path.Combine(tempDir, tempName + ".wav.tmp");
+                //Console.WriteLine($"Using temporary name: {tempName}");
 
                 string fileName = Path.GetFileName(filePath);
-                string destinationPath = Path.Combine(outputDir, Path.GetRelativePath(sourceDir, filePath));
-                Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+                // Output path moved to before writer
 
                 Console.WriteLine($"Processing file: {fileName}");
 
@@ -164,10 +162,13 @@ namespace WavHeaderScanner
                         var listEntry = chunks.Find(c => c.Id == "LIST");
                         var id3Entry = chunks.Find(c => c.Id == "id3 ");
 
+                        int audioType = -1;
+
                         // Create data flag and entry
                         bool dataRead = false;
                         ScottData fileInfo = new ScottData();
 
+                        // Temporary variables for scott fields
                         short startHundredths = 0;
                         short startSeconds = 0;
                         short endSeconds = 0;
@@ -185,6 +186,19 @@ namespace WavHeaderScanner
                         byte[] rawTitle;
                         byte[] rawArtist;
                         byte[] rawAlbum;
+
+                        // Read in audio type and other data from fmt chunk.
+                        if(fmtEntry != null)
+                        {
+                            fs.Seek(fmtEntry.Offset, SeekOrigin.Begin);
+                            audioType = reader.ReadInt16(); // Audio format, should be 1 for PCM
+                            reader.ReadInt16(); // Num channels
+                            reader.ReadInt32(); // Sample rate
+                            reader.ReadInt32(); // Byte rate
+                            reader.ReadInt16(); // Block align
+                            audioType = reader.ReadInt16(); // Bits per sample, used as audio type in scot chunk
+                            if (verbose) { Console.WriteLine($"\nAudio Type from fmt chunk: {audioType}"); }
+                        }
 
                         if (scotEntry != null && !dataRead)
                         {
@@ -511,6 +525,20 @@ namespace WavHeaderScanner
                             Console.WriteLine($"MPEG Bitrate:   {fileInfo.MpegBitrate} kbps");
                             Console.WriteLine($"Playback Speed: {fileInfo.PlaybackSpeed / 100.0}%");
                         }
+
+                        // Find String for Audio Type
+                        string audioTypeStr = audioType switch
+                        {
+                            0x0000 => "Unknown",
+                            0x0001 => "Microsoft PCM",
+                            0x0010 => "OKI-ADPCM",
+                            0x0050 => "Microsoft MPEG",
+                            _ => $"Unknown ({audioType})"
+                        };
+
+                        // Create output path and writer
+                        string destinationPath = Path.Combine(outputDir, Path.Combine($"{audioTypeStr}", Path.GetRelativePath(sourceDir, filePath)));
+                        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
 
                         using (var writer = new BinaryWriter(File.Create(destinationPath)))
                         {
