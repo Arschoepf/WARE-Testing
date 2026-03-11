@@ -531,13 +531,22 @@ namespace WavHeaderScanner
                         {
                             0x0000 => "Unknown",
                             0x0001 => "Microsoft PCM",
+                            0x0008 => "MPEG 2",
                             0x0010 => "OKI-ADPCM",
+                            0x0018 => "Media Vision ADPCM",
                             0x0050 => "Microsoft MPEG",
                             _ => $"Unknown ({audioType})"
                         };
 
+                        string compTypeStr = fileInfo.CompressionType switch
+                        {
+                            10 => "PCM",
+                            8 => "MP2",
+                            _ => $"Unknown ({fileInfo.CompressionType}"
+                        };
+
                         // Create output path and writer
-                        string destinationPath = Path.Combine(outputDir, Path.Combine($"{audioTypeStr}", Path.GetRelativePath(sourceDir, filePath)));
+                        string destinationPath = Path.Combine(outputDir, $"{audioTypeStr} - {compTypeStr}", Path.GetRelativePath(sourceDir, filePath));
                         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
 
                         using (var writer = new BinaryWriter(File.Create(destinationPath)))
