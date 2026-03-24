@@ -70,7 +70,7 @@ namespace WARE_Testing
                 writer.Write(data.CompressionType);                                                 // 1 byte, compression type (refer to documentation for specific values)
                 writer.Write(data.EomStartTenths);                                                  // 4 bytes, EOM start time in tenths of a second
                 writer.Write(data.EomLengthHundredths);                                             // 2 bytes, EOM length in hundredths of a second
-                writer.Write(data.Flags1);                                                          // 4 byte, extended (flags)1 bitfield
+                writer.Write(data.Flags1);                                                          // 0x098-0x09F **** 4 byte, extended (flags)1 bitfield
                 writer.Write(data.HookStartMs);                                                     // 4 bytes, hook start time in milliseconds
                 writer.Write(data.HookEomMs);                                                       // 4 bytes, hook EOM time in milliseconds
                 writer.Write(data.HookEndMs);                                                       // 4 bytes, hook end time in milliseconds
@@ -91,7 +91,14 @@ namespace WARE_Testing
                 writer.Write(WaveUtils.FixedString(data.Album, 34, (byte)' '));                     // 34 bytes
                 writer.Write(WaveUtils.FixedString(data.IntroSeconds, 2, (byte)'0'));               // 2 bytes
                 writer.Write(data.EndType);                                                         // 1 byte
-                writer.Write(WaveUtils.FixedString(data.ReleaseDate.Year.ToString(), 4, (byte)'0'));// 4 bytes
+                if (data.ReleaseDate.Equals(DateTime.MinValue))
+                {
+                    writer.Write("    ".ToCharArray());                                                   // 4 bytes, release year
+                }
+                else
+                {
+                    writer.Write(WaveUtils.FixedString(data.ReleaseDate.Year.ToString(), 4, (byte)'0')); // 4 bytes, release year
+                }
                 writer.Write((byte)0);                                                              // 1 byte, skip
                 if (data.ImportDate.Equals(DateTime.UnixEpoch))
                 {

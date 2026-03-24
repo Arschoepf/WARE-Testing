@@ -21,7 +21,7 @@ namespace WARE_Testing
         public byte CompressionType { get; set; } = 10;
         public int EomStartTenths { get; set; } = 0;
         public short EomLengthHundredths { get; set; } = 0;
-        public byte[] Flags1 { get; set; } = { 0x00, 0x01, 0x00, 0x00 }; // Only dayparting enabled
+        public byte[] Flags1 { get; set; } = { 0x00, 0x00, 0x00, 0x00 }; // Only dayparting enabled
         public int HookStartMs { get; set; } = 0;
         public int HookEomMs { get; set; } = 0;
         public int HookEndMs { get; set; } = 0;
@@ -33,13 +33,13 @@ namespace WARE_Testing
         public string BeforeCart { get; set; } = "    ";
         public string AfterCategory { get; set; } = "   ";
         public string AfterCart { get; set; } = "    ";
-        public byte[] RawDayparting { get; set; } = Enumerable.Repeat((byte)0xFF, 21).ToArray();
+        public byte[] RawDayparting { get; set; } = Enumerable.Repeat((byte)0x00, 21).ToArray();    // WO Likes this as 0's if not set
         public string Artist { get; set; } = string.Empty;
         public string Album { get; set; } = string.Empty;
         public string IntroSeconds { get; set; } = "00";
         public char EndType { get; set; } = ' ';
         public DateTime ReleaseDate { get; set; } = DateTime.MinValue;
-        public DateTime ImportDate { get; set; }
+        public DateTime ImportDate { get; set; } = DateTime.UnixEpoch;
         public short MpegBitrate { get; set; } = 0;
         public ushort PlaybackSpeed { get; set; } = 0;
         public ushort PlaybackLevel { get; set; } = 0;
